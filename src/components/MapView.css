@@ -1,0 +1,16 @@
+/* 지도 컨테이너에 진동 효과 적용 */
+.dart-shake {
+  animation: dartShake 0.5s ease-in-out;
+}
+
+@keyframes dartShake {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translate(-2px, -2px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translate(2px, 2px);
+  }
+}

@@ -1,0 +1,57 @@
+.dart-launcher {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 15px;
+  background-color: transparent;
+  border-radius: 16px;
+}
+
+.dart-icon {
+  transition: transform 0.3s ease;
+}
+
+
+/* 다트가 지도에 꽂힌 효과 (애니메이션 후) */
+.dart-icon.stuck {
+  animation: dartStuck 0.3s ease-out forwards;
+}
+
+@keyframes dartStuck {
+  0% {
+    transform: translateY(-500px) rotate(180deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.throw-button {
+  padding: 7px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.throw-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+}
+
+.throw-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.throw-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
