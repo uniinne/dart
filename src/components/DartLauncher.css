@@ -64,8 +64,8 @@
 }
 
 .reset-button {
-  padding: 7px 16px;
-  font-size: 14px;
+  padding: 14px 32px;
+  font-size: 16px;
   font-weight: 600;
   color: #ffffff;
   background: rgba(0, 0, 0, 0.5);
@@ -103,7 +103,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
+  padding: 8px 12px;
   border-radius: 999px;
   border: none;
   background: rgba(34, 139, 34, 0.5);
@@ -123,13 +123,13 @@
 }
 
 .list-button-icon {
-  width: 20px;
-  height: 20px;
-  margin-bottom: 2px;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 4px;
 }
 
 .list-button-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: #ffffff;
   white-space: nowrap;
