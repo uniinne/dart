@@ -14,3 +14,36 @@
     transform: translate(2px, 2px);
   }
 }
+
+/* 자동차 아이콘 스타일 */
+.car-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease-out;
+}
+
+.car-icon svg {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.start-car {
+  opacity: 0.9;
+}
+
+.moving-car {
+  animation: carMove 0.3s ease-out infinite;
+}
+
+@keyframes carMove {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+.arrived-car {
+  opacity: 1;
+}

@@ -37,11 +37,20 @@ body {
 
 .dart-overlay {
   position: absolute;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.dart-overlay.bottom-center {
   bottom: 30px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
-  pointer-events: none;
+}
+
+.dart-overlay.left-center {
+  top: 50%;
+  left: 20px;
+  transform: translateY(-50%);
 }
 
 .dart-overlay > * {

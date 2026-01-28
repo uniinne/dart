@@ -3,33 +3,28 @@
  * 바다를 제외한 한국 본토 영역 내에서 랜덤 좌표를 생성합니다.
  */
 
-// 한국 본토의 대략적인 경계 좌표 (육지 중심, 휴전선 제외)
-// 더 보수적으로 육지 영역만 포함하도록 범위 축소
+// 남한 기준 대략적인 경계 좌표 (바다 포함 가능하도록 더 넓게 확장)
+// - 북쪽은 휴전선 이남(대략 38도)까지만 포함
+// - 동/서/남쪽은 바다쪽을 더 넓게 포함해 다양성 증가
 const KOREA_BOUNDS = {
-  minLat: 33.5,  // 제주도 포함하되 바다 제외
-  maxLat: 38.0,  // 휴전선 이남 (38.0도 이하로 제한)
-  minLng: 126.0, // 서해안 육지 영역
-  maxLng: 130.0  // 동해안 육지 영역
+  minLat: 32.5, // 제주 남쪽 바다 더 넓게 포함
+  maxLat: 38.0, // 휴전선 이남
+  minLng: 124.0, // 서해 바다 더 넓게 포함
+  maxLng: 131.5, // 동해 바다 더 넓게 포함
 };
 
-// 주요 바다 영역 및 휴전선 근처 제외 (더 정확하게 정의)
+// 제외 영역: 극단적인 바다/휴전선 부근만 최소한으로 제외
+// (바다 포함을 허용하되, '알 수 없는 지역' 빈도만 낮추는 목적)
+// 해안가 박스를 축소하여 바다 포함 확률 증가
 const EXCLUDED_AREAS = [
-  // 서해 바다 영역 (넓게)
-  { minLat: 33.0, maxLat: 38.5, minLng: 124.0, maxLng: 127.5 },
-  // 남해 바다 영역 (넓게)
-  { minLat: 33.0, maxLat: 35.5, minLng: 125.5, maxLng: 130.5 },
-  // 동해 바다 영역 (넓게)
-  { minLat: 36.0, maxLat: 38.6, minLng: 128.8, maxLng: 132.0 },
-  // 제주도 남쪽 바다
-  { minLat: 33.0, maxLat: 33.8, minLng: 125.0, maxLng: 127.5 },
-  // 휴전선 근처 (38.0도 이상)
-  { minLat: 38.0, maxLat: 38.6, minLng: 125.0, maxLng: 131.0 },
-  // 울릉도 동쪽 바다
-  { minLat: 37.0, maxLat: 38.0, minLng: 130.0, maxLng: 132.0 },
-  // 서해안 해안가 (더 넓게 제외)
-  { minLat: 33.5, maxLat: 38.0, minLng: 126.0, maxLng: 126.5 },
-  // 동해안 해안가 (더 넓게 제외)
-  { minLat: 36.0, maxLat: 38.0, minLng: 129.5, maxLng: 130.0 },
+  // 휴전선 근처(38도 이상)만 제외
+  { minLat: 38.0, maxLat: 38.8, minLng: 124.0, maxLng: 131.5 },
+
+  // 제주도 남쪽 먼 바다(극단값) 일부만 제외 (범위 축소)
+  { minLat: 32.5, maxLat: 32.8, minLng: 124.0, maxLng: 131.5 },
+
+  // 동해 먼 바다(극단값) 일부만 제외 (범위 축소)
+  { minLat: 37.0, maxLat: 38.0, minLng: 131.2, maxLng: 131.5 },
 ];
 
 /**
@@ -44,6 +39,32 @@ function isInExcludedArea(lat, lng) {
   );
 }
 
+// 확실한 육지 위주 안전 좌표(다양한 권역)
+export const safeAreas = [
+  { lat: 37.5, lng: 127.0 }, // 서울/경기
+  { lat: 36.3, lng: 127.4 }, // 대전/충남
+  { lat: 35.8, lng: 127.1 }, // 전북
+  { lat: 35.2, lng: 126.9 }, // 전남
+  { lat: 36.0, lng: 128.6 }, // 경북
+  { lat: 35.2, lng: 129.0 }, // 경남
+  { lat: 37.0, lng: 127.5 }, // 경기 중앙
+  { lat: 36.5, lng: 127.8 }, // 충청 중앙
+  { lat: 37.8, lng: 128.9 }, // 강원 남부
+  { lat: 33.45, lng: 126.55 }, // 제주(시내권)
+];
+
+/**
+ * 안전한 좌표 생성 (safeAreas 기반)
+ * @returns {{lat: number, lng: number}} 안전한 좌표 객체
+ */
+export function generateSafeCoords() {
+  const randomArea = safeAreas[Math.floor(Math.random() * safeAreas.length)];
+  return {
+    lat: randomArea.lat + (Math.random() - 0.5) * 0.3, // ±0.15도 범위
+    lng: randomArea.lng + (Math.random() - 0.5) * 0.3, // ±0.15도 범위
+  };
+}
+
 /**
  * 랜덤 좌표 생성
  * @returns {{lat: number, lng: number}} 랜덤 좌표 객체
@@ -54,40 +75,17 @@ export function generateRandomCoords() {
   const maxAttempts = 500; // 시도 횟수 증가
 
   do {
-    // 한국 경계 내에서 랜덤 좌표 생성 (육지 중심 영역)
-    // 더 보수적으로 중앙 영역에 가깝게 생성
-    const centerLat = (KOREA_BOUNDS.minLat + KOREA_BOUNDS.maxLat) / 2;
-    const centerLng = (KOREA_BOUNDS.minLng + KOREA_BOUNDS.maxLng) / 2;
-    
-    // 중앙에서 ±범위 내에서 랜덤 생성 (바다 확률 감소)
-    const latRange = (KOREA_BOUNDS.maxLat - KOREA_BOUNDS.minLat) * 0.8;
-    const lngRange = (KOREA_BOUNDS.maxLng - KOREA_BOUNDS.minLng) * 0.8;
-    
-    lat = centerLat + (Math.random() - 0.5) * latRange;
-    lng = centerLng + (Math.random() - 0.5) * lngRange;
-    
-    // 경계 내로 제한
-    lat = Math.max(KOREA_BOUNDS.minLat, Math.min(KOREA_BOUNDS.maxLat, lat));
-    lng = Math.max(KOREA_BOUNDS.minLng, Math.min(KOREA_BOUNDS.maxLng, lng));
-    
+    // 경계 내에서 균등 랜덤(전체 범위 다양성)
+    lat = KOREA_BOUNDS.minLat + Math.random() * (KOREA_BOUNDS.maxLat - KOREA_BOUNDS.minLat);
+    lng = KOREA_BOUNDS.minLng + Math.random() * (KOREA_BOUNDS.maxLng - KOREA_BOUNDS.minLng);
+
     attempts++;
     
-    // 최대 시도 횟수를 초과하면 중앙 지역 좌표 반환 (확실한 육지)
+    // 최대 시도 횟수를 초과하면 안전 좌표 반환 (확실한 육지)
     if (attempts >= maxAttempts) {
-      // 대한민국 중앙 지역 (확실한 육지 - 경기도, 충청도, 전라도 중심)
-      const safeAreas = [
-        { lat: 37.5, lng: 127.0 }, // 서울/경기
-        { lat: 36.3, lng: 127.4 }, // 대전/충남
-        { lat: 35.8, lng: 127.1 }, // 전북
-        { lat: 35.2, lng: 126.9 }, // 전남
-        { lat: 36.0, lng: 128.6 }, // 경북
-        { lat: 35.2, lng: 129.0 }, // 경남
-        { lat: 37.0, lng: 127.5 }, // 경기 중앙
-        { lat: 36.5, lng: 127.8 }, // 충청 중앙
-      ];
-      const randomArea = safeAreas[Math.floor(Math.random() * safeAreas.length)];
-      lat = randomArea.lat + (Math.random() - 0.5) * 0.3; // ±0.15도 범위 (더 좁게)
-      lng = randomArea.lng + (Math.random() - 0.5) * 0.3; // ±0.15도 범위 (더 좁게)
+      const safeCoords = generateSafeCoords();
+      lat = safeCoords.lat;
+      lng = safeCoords.lng;
       break;
     }
   } while (isInExcludedArea(lat, lng));

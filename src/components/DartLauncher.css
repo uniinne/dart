@@ -8,6 +8,13 @@
   border-radius: 16px;
 }
 
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
 .dart-icon {
   transition: transform 0.3s ease;
 }
@@ -54,4 +61,76 @@
 .throw-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.reset-button {
+  padding: 7px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.reset-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.reset-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.reset-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 맛집/관광지 리스트 아이콘 버튼 영역 */
+.list-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.list-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(34, 139, 34, 0.5);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.list-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(34, 139, 34, 0.4);
+  background: rgba(34, 139, 34, 0.65);
+}
+
+.list-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.list-button-icon {
+  width: 20px;
+  height: 20px;
+  margin-bottom: 2px;
+}
+
+.list-button-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #ffffff;
+  white-space: nowrap;
 }
