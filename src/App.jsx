@@ -178,44 +178,41 @@ function App() {
     const trimmed = name.trim();
     if (trimmed.length === 0 || trimmed === '알 수 없는 지역') return false;
     
-    // 읍/면/동이 포함되어 있는지 확인 (공백으로 분리했을 때 3개 이상의 부분이 있어야 함)
+    // 시/도, 시/군/구 최소 2개 부분이 있으면 유효 (읍/면/동은 있으면 포함, 없어도 OK)
     const parts = trimmed.split(' ').filter(p => p.length > 0);
-    // 시/도, 시/군/구, 읍/면/동 최소 3개 부분이 있어야 유효
-    return parts.length >= 3;
+    return parts.length >= 2;
   };
 
   const preselectWinnerTarget = async () => {
-    const maxTries = 30; // 재시도 횟수 증가 (읍/면/동 포함 지역 찾기 위해)
+    const maxTries = 30; // 무작위 좌표로 재시도
 
-    // 일반 랜덤 좌표로 재시도 (읍/면/동이 포함된 지역명만 유효)
+    // 1단계만: 완전 무작위 좌표로 시도 (읍/면/동 있으면 읍/면/동까지만, 없으면 시/도, 시/군/구까지만)
+    let lastValidResult = null;
     for (let i = 0; i < maxTries; i++) {
       const coords = pickRandomCoordsPreferVisible();
       try {
         const regionName = await reverseGeocode(coords.lat, coords.lng);
         if (isValidRegionName(regionName)) {
+          // 읍/면/동이 포함되어 있으면 읍/면/동까지만, 없으면 시/도, 시/군/구까지만 반환
           return { coords, regionName };
         }
-      } catch (err) {
-        // ignore and retry
-      }
-    }
-
-    // safeAreas 기반 좌표로 여러 번 시도
-    for (let i = 0; i < 10; i++) {
-      const safeCoords = generateSafeCoords();
-      try {
-        const regionName = await reverseGeocode(safeCoords.lat, safeCoords.lng);
-        if (isValidRegionName(regionName)) {
-          return { coords: safeCoords, regionName };
+        // 유효하지 않아도 마지막 결과 저장 (fallback용)
+        if (regionName && regionName !== '알 수 없는 지역') {
+          lastValidResult = { coords, regionName };
         }
       } catch (err) {
         // ignore and retry
       }
     }
 
-    // 최후의 fallback (좌표는 하나 주되, 배너에 표시할 지역명이 없을 수 있음)
-    const safeCoords = generateSafeCoords();
-    return { coords: safeCoords, regionName: '알 수 없는 지역' };
+    // 30번 모두 실패했지만 마지막 유효한 결과가 있으면 그것 반환
+    if (lastValidResult) {
+      return lastValidResult;
+    }
+
+    // 완전히 실패한 경우
+    const fallbackCoords = pickRandomCoordsPreferVisible();
+    return { coords: fallbackCoords, regionName: '알 수 없는 지역' };
   };
 
   const ensurePreselectedTarget = async () => {
