@@ -91,6 +91,39 @@
   cursor: not-allowed;
 }
 
+.reset-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.avg-button {
+  padding: 14px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(34, 139, 34, 0.5);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(34, 139, 34, 0.25);
+  white-space: nowrap;
+}
+
+.avg-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: rgba(34, 139, 34, 0.65);
+  box-shadow: 0 6px 16px rgba(34, 139, 34, 0.35);
+}
+
+.avg-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* 맛집/관광지 리스트 아이콘 버튼 영역 */
 .list-buttons {
   display: flex;

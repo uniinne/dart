@@ -1,7 +1,7 @@
 import React from 'react';
 import './WinnerPopup.css';
 
-const WinnerPopup = ({ regionName, onClose }) => {
+const WinnerPopup = ({ regionName, onClose, title = '당첨지역으로 떠나세요!!', label = '여행지' }) => {
   if (!regionName) return null;
 
   return (
@@ -40,11 +40,11 @@ const WinnerPopup = ({ regionName, onClose }) => {
               <line x1="12" y1="24" x2="14" y2="24" stroke="#fff" strokeWidth="1"/>
             </svg>
           </div>
-          <h2 className="popup-title">당첨지역으로 떠나세요!!</h2>
+          <h2 className="popup-title">{title}</h2>
         </div>
         <div className="popup-body">
           <div className="region-card">
-            <div className="region-label">여행지</div>
+            <div className="region-label">{label}</div>
             <p className="region-name">{regionName}</p>
             <div className="decorative-line"></div>
           </div>

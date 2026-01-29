@@ -8,6 +8,8 @@ const DartLauncher = ({
   onShowPlaceList,
   onShowHotelList,
   onShowDirections,
+  onShowAverageRegion,
+  canShowAverageRegion = false,
   isThrowing,
   showDart = true,
   canReset = false,
@@ -47,6 +49,15 @@ const DartLauncher = ({
     } else {
       // eslint-disable-next-line no-console
       console.log('길찾기 아이콘 클릭');
+    }
+  };
+
+  const handleAverageClick = () => {
+    if (onShowAverageRegion) {
+      onShowAverageRegion();
+    } else {
+      // eslint-disable-next-line no-console
+      console.log('최근 10개 평균값 지역 보기 클릭');
     }
   };
 
@@ -245,13 +256,26 @@ const DartLauncher = ({
         )}
 
         {canReset && (
-          <button
-            className="reset-button"
-            onClick={onReset}
-            disabled={isThrowing}
-          >
-            {isThrowing ? '이동 중...' : '다시하기'}
-          </button>
+          <div className="reset-row">
+            <button
+              className="reset-button"
+              onClick={onReset}
+              disabled={isThrowing}
+            >
+              {isThrowing ? '이동 중...' : '다시하기'}
+            </button>
+
+            {canShowAverageRegion && (
+              <button
+                className="avg-button"
+                onClick={handleAverageClick}
+                disabled={isThrowing}
+                type="button"
+              >
+                최근 10개 평균값 지역 보기
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

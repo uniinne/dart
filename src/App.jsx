@@ -10,6 +10,7 @@ import './styles/App.css';
 
 // 용산역 좌표 (출발 지점)
 const YONGSAN_STATION = { lat: 37.5297, lng: 126.9649 };
+const KOREAN_ORDINALS = ['첫번째', '두번째', '세번째', '네번째', '다섯번째', '여섯번째', '일곱번째', '여덟번째', '아홉번째', '열번째'];
 
 function App() {
   const [center, setCenter] = useState({ lat: 36.5, lng: 127.5 }); // 대한민국 중심
@@ -25,6 +26,12 @@ function App() {
   const previousCarPositionRef = useRef(null); // 이전 자동차 위치 추적
   const [preselectedTarget, setPreselectedTarget] = useState(null); // { coords: {lat,lng}, regionName }
   const [isPreselecting, setIsPreselecting] = useState(false);
+  const [history, setHistory] = useState([]); // 최근 10회: [{ regionName, lat, lng, ts }]
+  const [throwCount, setThrowCount] = useState(0); // 누적 목적지 정하기 횟수
+  const [avgEligible, setAvgEligible] = useState(false); // 이번 라운드(10번째) 평균값 보기 가능 여부
+  const [avgCoords, setAvgCoords] = useState(null); // { lat, lng }
+  const [avgRegionName, setAvgRegionName] = useState(null);
+  const [showAvgPopup, setShowAvgPopup] = useState(false);
   const mapContainerRef = useRef(null);
   const kakaoMapRef = useRef(null);
   const pendingTargetRef = useRef(null); // 비동기 타이밍용 (현재 던진 목표 좌표)
@@ -258,6 +265,7 @@ function App() {
     const targetRegionName = target?.regionName;
 
     // 확정 정보가 없거나, 알 수 없는 지역이면 한 번 더 자동 재확정
+    let chosenRegionName = targetRegionName;
     if (!targetCoords || !isValidRegionName(targetRegionName)) {
       setPreselectedTarget(null);
       const reselected = await ensurePreselectedTarget();
@@ -269,13 +277,50 @@ function App() {
         return;
       }
       pendingTargetRef.current = reselected.coords;
+      chosenRegionName = reselected.regionName;
       setWinnerRegion(reselected.regionName);
     } else {
       pendingTargetRef.current = targetCoords;
+      chosenRegionName = targetRegionName;
       setWinnerRegion(targetRegionName);
     }
 
     const finalTarget = pendingTargetRef.current;
+
+    // 최근 10회 히스토리 저장 + (매 10번째) 평균 좌표 계산
+    const nextCount = throwCount + 1;
+    setThrowCount(nextCount);
+    const finalRegionNameForHistory = chosenRegionName || '알 수 없는 지역';
+
+    setHistory((prev) => {
+      const next = [
+        ...prev,
+        {
+          regionName: finalRegionNameForHistory,
+          lat: finalTarget?.lat,
+          lng: finalTarget?.lng,
+          ts: Date.now(),
+        },
+      ].filter((x) => typeof x.lat === 'number' && typeof x.lng === 'number');
+
+      const last10 = next.length > 10 ? next.slice(next.length - 10) : next;
+
+      if (nextCount % 10 === 0 && last10.length === 10) {
+        const sum = last10.reduce(
+          (acc, cur) => ({ lat: acc.lat + cur.lat, lng: acc.lng + cur.lng }),
+          { lat: 0, lng: 0 }
+        );
+        setAvgCoords({ lat: sum.lat / 10, lng: sum.lng / 10 });
+        setAvgEligible(true);
+      } else {
+        setAvgEligible(false);
+        setAvgCoords(null);
+        setAvgRegionName(null);
+        setShowAvgPopup(false);
+      }
+
+      return last10;
+    });
     
     const containerEl = mapContainerRef.current;
     const rect = containerEl?.getBoundingClientRect?.();
@@ -389,6 +434,22 @@ function App() {
     void ensurePreselectedTarget();
     // 용산역 자동차 숨기기 (다시하기 버튼으로만 표시)
     setShowStartCar(false);
+  };
+
+  const handleShowAverageRegion = useCallback(async () => {
+    if (!avgEligible || !avgCoords) return;
+    try {
+      const name = await reverseGeocode(avgCoords.lat, avgCoords.lng);
+      setAvgRegionName(name || '알 수 없는 지역');
+      setShowAvgPopup(true);
+    } catch (e) {
+      setAvgRegionName('알 수 없는 지역');
+      setShowAvgPopup(true);
+    }
+  }, [avgEligible, avgCoords]);
+
+  const handleCloseAvgPopup = () => {
+    setShowAvgPopup(false);
   };
 
   // 다시하기: 당첨 지역의 자동차를 용산역으로 돌아가게 함
@@ -551,34 +612,64 @@ function App() {
 
   return (
     <div className="app">
-      <div className="map-container" ref={mapContainerRef}>
-        <MapView 
-          center={center} 
-          level={level}
-          onMapCreate={(map) => {
-            kakaoMapRef.current = map;
-          }}
-          stuckDartPosition={dartPosition}
-          flyingDartPosition={flyingDartPosition}
-          startPosition={showStartCar && !isThrowing && !showPopup ? YONGSAN_STATION : null}
-          carRotation={carRotation}
-        />
-        
-        {/* 다트 런처를 지도 위에 오버레이 */}
-        <div className={`dart-overlay ${!!dartPosition && !flyingDartPosition && !showPopup ? 'left-center' : 'bottom-center'}`}>
-          <DartLauncher 
-            onThrowDart={handleThrowDart}
-            onReset={handleReset}
-            onShowFoodList={handleShowFoodList}
-            onShowPlaceList={handleShowPlaceList}
-            onShowHotelList={handleShowHotelList}
-            onShowDirections={handleShowDirections}
-            isThrowing={isThrowing}
-            showDart={!flyingDartPosition}
-            canReset={!!dartPosition && !flyingDartPosition && !showPopup}
+      <div className="app-map">
+        <div className="map-container" ref={mapContainerRef}>
+          <MapView 
+            center={center} 
+            level={level}
+            onMapCreate={(map) => {
+              kakaoMapRef.current = map;
+            }}
+            stuckDartPosition={dartPosition}
+            flyingDartPosition={flyingDartPosition}
+            startPosition={showStartCar && !showPopup && (!isThrowing || flyingDartPosition === null) ? YONGSAN_STATION : null}
+            carRotation={carRotation}
           />
+          
+          {/* 다트 런처를 지도 위에 오버레이 */}
+          <div className={`dart-overlay ${!!dartPosition && !flyingDartPosition && !showPopup ? 'left-center' : 'bottom-center'}`}>
+            <DartLauncher 
+              onThrowDart={handleThrowDart}
+              onReset={handleReset}
+              onShowFoodList={handleShowFoodList}
+              onShowPlaceList={handleShowPlaceList}
+              onShowHotelList={handleShowHotelList}
+              onShowDirections={handleShowDirections}
+              onShowAverageRegion={handleShowAverageRegion}
+              canShowAverageRegion={avgEligible && !!dartPosition && !flyingDartPosition && !showPopup}
+              isThrowing={isThrowing}
+              showDart={!flyingDartPosition}
+              canReset={!!dartPosition && !flyingDartPosition && !showPopup}
+            />
+          </div>
         </div>
       </div>
+
+      {/* 우측 HISTORY 패널 (최근 10회 지역/위도/경도) */}
+      <aside className="history-panel">
+        <div className="history-title">HISTORY (최근 10회)</div>
+        <div className="history-subtitle">지역 / 위도 / 경도</div>
+        <ul className="history-list">
+          {(history.length ? history : Array.from({ length: 10 }).map(() => null)).map((item, idx) => {
+            const label = KOREAN_ORDINALS[idx] || `${idx + 1}번째`;
+            const region = item?.regionName ?? `${label} 당첨지역`;
+            const lat = typeof item?.lat === 'number' ? item.lat.toFixed(5) : '-';
+            const lng = typeof item?.lng === 'number' ? item.lng.toFixed(5) : '-';
+            return (
+              <li key={idx} className="history-item">
+                <div className="history-row1">
+                  <span className="history-order">{idx + 1}</span>
+                  <span className="history-region">{region}</span>
+                </div>
+                <div className="history-row2">
+                  <span className="history-coord">lat {lat}</span>
+                  <span className="history-coord">lng {lng}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </aside>
 
       <ConfettiEffect trigger={showConfetti} />
       
@@ -586,6 +677,15 @@ function App() {
         <WinnerPopup 
           regionName={winnerRegion}
           onClose={handleClosePopup}
+        />
+      )}
+
+      {showAvgPopup && (
+        <WinnerPopup
+          title="최근 목적지 10개의 장소 위도 경도 평균값 지역"
+          label="평균값 지역"
+          regionName={avgRegionName}
+          onClose={handleCloseAvgPopup}
         />
       )}
     </div>
