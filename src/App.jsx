@@ -35,6 +35,7 @@ function App() {
   const mapContainerRef = useRef(null);
   const kakaoMapRef = useRef(null);
   const pendingTargetRef = useRef(null); // 비동기 타이밍용 (현재 던진 목표 좌표)
+  const pendingHistoryRef = useRef(null); // 배너 "확인" 후 HISTORY에 반영할 값
   const flyingAnimIdRef = useRef(null);
   const preselectInFlightRef = useRef(null);
   const isOpeningFoodRef = useRef(false);
@@ -286,41 +287,13 @@ function App() {
     }
 
     const finalTarget = pendingTargetRef.current;
-
-    // 최근 10회 히스토리 저장 + (매 10번째) 평균 좌표 계산
-    const nextCount = throwCount + 1;
-    setThrowCount(nextCount);
-    const finalRegionNameForHistory = chosenRegionName || '알 수 없는 지역';
-
-    setHistory((prev) => {
-      const next = [
-        ...prev,
-        {
-          regionName: finalRegionNameForHistory,
-          lat: finalTarget?.lat,
-          lng: finalTarget?.lng,
-          ts: Date.now(),
-        },
-      ].filter((x) => typeof x.lat === 'number' && typeof x.lng === 'number');
-
-      const last10 = next.length > 10 ? next.slice(next.length - 10) : next;
-
-      if (nextCount % 10 === 0 && last10.length === 10) {
-        const sum = last10.reduce(
-          (acc, cur) => ({ lat: acc.lat + cur.lat, lng: acc.lng + cur.lng }),
-          { lat: 0, lng: 0 }
-        );
-        setAvgCoords({ lat: sum.lat / 10, lng: sum.lng / 10 });
-        setAvgEligible(true);
-      } else {
-        setAvgEligible(false);
-        setAvgCoords(null);
-        setAvgRegionName(null);
-        setShowAvgPopup(false);
-      }
-
-      return last10;
-    });
+    // 당첨 배너 "확인" 이후에만 HISTORY가 업데이트되도록 대기값 저장
+    pendingHistoryRef.current = {
+      regionName: chosenRegionName || '알 수 없는 지역',
+      lat: finalTarget?.lat,
+      lng: finalTarget?.lng,
+      ts: Date.now(),
+    };
     
     const containerEl = mapContainerRef.current;
     const rect = containerEl?.getBoundingClientRect?.();
@@ -428,6 +401,40 @@ function App() {
   const handleClosePopup = () => {
     setShowPopup(false);
     setShowConfetti(false);
+
+    // "확인" 후에만 HISTORY 반영 (미리 알 수 없게)
+    const pending = pendingHistoryRef.current;
+    pendingHistoryRef.current = null;
+    if (pending && typeof pending.lat === 'number' && typeof pending.lng === 'number') {
+      setThrowCount((prevCount) => {
+        const nextCount = prevCount + 1;
+
+        setHistory((prevHistory) => {
+          const next = [...prevHistory, pending];
+          const last10 = next.length > 10 ? next.slice(next.length - 10) : next;
+
+          // 10개가 채워진 시점(10, 20, 30...)에만 평균값 버튼 활성화
+          if (nextCount % 10 === 0 && last10.length === 10) {
+            const sum = last10.reduce(
+              (acc, cur) => ({ lat: acc.lat + cur.lat, lng: acc.lng + cur.lng }),
+              { lat: 0, lng: 0 }
+            );
+            setAvgCoords({ lat: sum.lat / 10, lng: sum.lng / 10 });
+            setAvgEligible(true);
+          } else {
+            setAvgEligible(false);
+            setAvgCoords(null);
+            setAvgRegionName(null);
+            setShowAvgPopup(false);
+          }
+
+          return last10;
+        });
+
+        return nextCount;
+      });
+    }
+
     // winnerRegion은 유지 (맛집/관광지 리스트 버튼에서 사용하기 위해)
     // 다음 라운드를 위해 미리 확정 다시 수행
     setPreselectedTarget(null);
@@ -439,8 +446,30 @@ function App() {
   const handleShowAverageRegion = useCallback(async () => {
     if (!avgEligible || !avgCoords) return;
     try {
-      const name = await reverseGeocode(avgCoords.lat, avgCoords.lng);
-      setAvgRegionName(name || '알 수 없는 지역');
+      const roundTo = (value, decimals) => {
+        const p = Math.pow(10, decimals);
+        return Math.round(value * p) / p;
+      };
+
+      // 평균 좌표가 행정구역 경계/바다에 걸리면 "알 수 없는 지역"이 나올 수 있어,
+      // 소수점 끝자리부터 반올림(정밀도 낮추기)하며 읍/면/동(3뎁스) 특정될 때까지 재시도
+      // (너무 크게 뭉개지지 않도록 6자리 -> 2자리까지만 시도)
+      const decimalSteps = [6, 5, 4, 3, 2];
+
+      let resolvedName = null;
+      for (const d of decimalSteps) {
+        const lat = roundTo(avgCoords.lat, d);
+        const lng = roundTo(avgCoords.lng, d);
+        // eslint-disable-next-line no-await-in-loop
+        const name = await reverseGeocode(lat, lng);
+        if (isValidRegionName(name)) {
+          resolvedName = name;
+          setAvgCoords({ lat, lng }); // 성공한 좌표로 갱신(표시/재조회 일관성)
+          break;
+        }
+      }
+
+      setAvgRegionName(resolvedName || '알 수 없는 지역');
       setShowAvgPopup(true);
     } catch (e) {
       setAvgRegionName('알 수 없는 지역');
@@ -516,6 +545,16 @@ function App() {
     setShowStartCar(true); // 용산역 자동차 다시 표시
     setWinnerRegion(null); // 다시하기 완료 후 winnerRegion 초기화
     setIsThrowing(false);
+
+    // 10개 채워진 뒤 다시하기를 누르면 HISTORY를 비우고 다음 사이클 시작
+    if (history.length >= 10) {
+      setHistory([]);
+      setThrowCount(0);
+      setAvgEligible(false);
+      setAvgCoords(null);
+      setAvgRegionName(null);
+      setShowAvgPopup(false);
+    }
   };
 
   // 당첨 지역 기반 맛집 리스트 열기
