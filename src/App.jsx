@@ -186,14 +186,14 @@ function App() {
   const preselectWinnerTarget = async () => {
     const maxTries = 30; // 무작위 좌표로 재시도
 
-    // 1단계만: 완전 무작위 좌표로 시도 (읍/면/동 있으면 읍/면/동까지만, 없으면 시/도, 시/군/구까지만)
+    // 1단계만: 완전 무작위 좌표로 시도 (통/리/반까지 모든 주소 정보 포함)
     let lastValidResult = null;
     for (let i = 0; i < maxTries; i++) {
       const coords = pickRandomCoordsPreferVisible();
       try {
         const regionName = await reverseGeocode(coords.lat, coords.lng);
         if (isValidRegionName(regionName)) {
-          // 읍/면/동이 포함되어 있으면 읍/면/동까지만, 없으면 시/도, 시/군/구까지만 반환
+          // 통/리/반까지 모든 주소 정보 반환
           return { coords, regionName };
         }
         // 유효하지 않아도 마지막 결과 저장 (fallback용)
@@ -655,8 +655,12 @@ function App() {
       return;
     }
 
+    // 시/군/구까지만 추출하여 검색
+    const parts = trimmed.split(' ').filter(p => p.length > 0);
+    const cityDistrict = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : trimmed;
+
     // 야놀자 지역 키워드 검색 URL
-    const encoded = encodeURIComponent(trimmed);
+    const encoded = encodeURIComponent(cityDistrict);
     const url = `https://nol.yanolja.com/local/search?keyword=${encoded}`;
 
     // 한 번만 실행되도록 보장
