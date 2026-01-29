@@ -32,6 +32,7 @@ function App() {
   const [avgCoords, setAvgCoords] = useState(null); // { lat, lng }
   const [avgRegionName, setAvgRegionName] = useState(null);
   const [showAvgPopup, setShowAvgPopup] = useState(false);
+  const [isUsingAvgRegion, setIsUsingAvgRegion] = useState(false); // 평균 지역 사용 중 여부
   const mapContainerRef = useRef(null);
   const kakaoMapRef = useRef(null);
   const pendingTargetRef = useRef(null); // 비동기 타이밍용 (현재 던진 목표 좌표)
@@ -442,6 +443,9 @@ function App() {
 
   const handleShowAverageRegion = useCallback(async () => {
     if (!avgEligible || !avgCoords) return;
+    
+    setIsThrowing(true);
+    
     try {
       const roundTo = (value, decimals) => {
         const p = Math.pow(10, decimals);
@@ -513,10 +517,84 @@ function App() {
         setAvgCoords(resolvedCoords); // 성공한 좌표로 갱신
       }
       setAvgRegionName(resolvedName || '알 수 없는 지역');
+      
+      // 기존 도착 지점 자동차 숨기기 (10번째 지역에 있던 자동차 제거)
+      setDartPosition(null);
+      
+      // 평균 좌표로 자동차 애니메이션 실행
+      const finalTarget = resolvedCoords || avgCoords;
+      if (finalTarget) {
+        const mapContainer = mapContainerRef.current;
+        const rect = mapContainer?.getBoundingClientRect();
+        
+        if (!rect) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          setDartPosition(finalTarget);
+        } else {
+          const startCoords = YONGSAN_STATION;
+          
+          // 기존 애니메이션이 돌고 있으면 중단
+          if (flyingAnimIdRef.current) {
+            cancelAnimationFrame(flyingAnimIdRef.current);
+            flyingAnimIdRef.current = null;
+          }
+
+          // 지도 좌표를 선형 보간하면서 비행(1.5초)
+          const durationMs = 1500;
+          const startTime = performance.now();
+          const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+          // 이전 위치 초기화
+          previousCarPositionRef.current = startCoords;
+          setFlyingDartPosition(startCoords);
+          setCarRotation(0);
+
+          await new Promise((resolve) => {
+            const tick = (now) => {
+              const rawT = (now - startTime) / durationMs;
+              const t = Math.max(0, Math.min(1, rawT));
+              const e = easeOutCubic(t);
+
+              const lat = startCoords.lat + (finalTarget.lat - startCoords.lat) * e;
+              const lng = startCoords.lng + (finalTarget.lng - startCoords.lng) * e;
+              const currentPos = { lat, lng };
+              
+              // 이동 방향에 따라 자동차 회전 각도 계산
+              if (previousCarPositionRef.current) {
+                const prev = previousCarPositionRef.current;
+                const dx = currentPos.lng - prev.lng;
+                const dy = currentPos.lat - prev.lat;
+                const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                setCarRotation(angle);
+              }
+              
+              previousCarPositionRef.current = currentPos;
+              setFlyingDartPosition(currentPos);
+
+              if (t >= 1) {
+                flyingAnimIdRef.current = null;
+                resolve();
+                return;
+              }
+              flyingAnimIdRef.current = requestAnimationFrame(tick);
+            };
+            flyingAnimIdRef.current = requestAnimationFrame(tick);
+          });
+
+          // 마지막 프레임이 곧 확정 위치
+          setFlyingDartPosition(null);
+          setDartPosition(finalTarget);
+        }
+      }
+      
       setShowAvgPopup(true);
+      setIsUsingAvgRegion(true); // 평균 지역 사용 시작
+      setIsThrowing(false);
     } catch (e) {
       setAvgRegionName('알 수 없는 지역');
       setShowAvgPopup(true);
+      setIsUsingAvgRegion(true);
+      setIsThrowing(false);
     }
   }, [avgEligible, avgCoords]);
 
@@ -587,6 +665,7 @@ function App() {
     setCarRotation(0);
     setShowStartCar(true); // 용산역 자동차 다시 표시
     setWinnerRegion(null); // 다시하기 완료 후 winnerRegion 초기화
+    setIsUsingAvgRegion(false); // 평균 지역 사용 종료
     setIsThrowing(false);
 
     // 10개 채워진 뒤 다시하기를 누르면 HISTORY를 비우고 다음 사이클 시작
@@ -597,6 +676,7 @@ function App() {
       setAvgCoords(null);
       setAvgRegionName(null);
       setShowAvgPopup(false);
+      setIsUsingAvgRegion(false); // 평균 지역 사용 종료
     }
   };
 
@@ -605,7 +685,10 @@ function App() {
     if (isOpeningFoodRef.current) return;
     isOpeningFoodRef.current = true;
     
-    const url = generateKakaoMapSearchUrl(winnerRegion, '맛집');
+    // 평균 지역 사용 중이면 평균 지역 사용, 아니면 당첨 지역 사용
+    const regionToUse = isUsingAvgRegion && avgRegionName ? avgRegionName : winnerRegion;
+    
+    const url = generateKakaoMapSearchUrl(regionToUse, '맛집');
     if (!url) {
       isOpeningFoodRef.current = false;
       return;
@@ -618,14 +701,17 @@ function App() {
     setTimeout(() => {
       isOpeningFoodRef.current = false;
     }, 2000);
-  }, [winnerRegion]);
+  }, [winnerRegion, isUsingAvgRegion, avgRegionName]);
 
   // 당첨 지역 기반 관광지 리스트 열기
   const handleShowPlaceList = useCallback(() => {
     if (isOpeningPlaceRef.current) return;
     isOpeningPlaceRef.current = true;
     
-    const url = generateKakaoMapSearchUrl(winnerRegion, '관광지');
+    // 평균 지역 사용 중이면 평균 지역 사용, 아니면 당첨 지역 사용
+    const regionToUse = isUsingAvgRegion && avgRegionName ? avgRegionName : winnerRegion;
+    
+    const url = generateKakaoMapSearchUrl(regionToUse, '관광지');
     if (!url) {
       isOpeningPlaceRef.current = false;
       return;
@@ -638,18 +724,21 @@ function App() {
     setTimeout(() => {
       isOpeningPlaceRef.current = false;
     }, 2000);
-  }, [winnerRegion]);
+  }, [winnerRegion, isUsingAvgRegion, avgRegionName]);
 
   // 당첨 지역 기반 숙소 리스트 열기 (야놀자 검색)
   const handleShowHotelList = useCallback(() => {
     if (isOpeningHotelRef.current) return;
     isOpeningHotelRef.current = true;
     
-    if (!winnerRegion || typeof winnerRegion !== 'string') {
+    // 평균 지역 사용 중이면 평균 지역 사용, 아니면 당첨 지역 사용
+    const regionToUse = isUsingAvgRegion && avgRegionName ? avgRegionName : winnerRegion;
+    
+    if (!regionToUse || typeof regionToUse !== 'string') {
       isOpeningHotelRef.current = false;
       return;
     }
-    const trimmed = winnerRegion.trim();
+    const trimmed = regionToUse.trim();
     if (!trimmed || trimmed === '알 수 없는 지역') {
       isOpeningHotelRef.current = false;
       return;
@@ -670,23 +759,54 @@ function App() {
     setTimeout(() => {
       isOpeningHotelRef.current = false;
     }, 2000);
-  }, [winnerRegion]);
+  }, [winnerRegion, isUsingAvgRegion, avgRegionName]);
 
   // 당첨 지역으로 길찾기 열기 (용산역 출발, 자동차)
   const handleShowDirections = useCallback(() => {
     if (isOpeningDirectionsRef.current) return;
     isOpeningDirectionsRef.current = true;
     
-    if (!dartPosition || !winnerRegion) {
+    // 평균 지역 사용 중이면 평균 지역 사용, 아니면 당첨 지역 사용
+    const regionToUse = isUsingAvgRegion && avgRegionName ? avgRegionName : winnerRegion;
+    const coordsToUse = showAvgPopup && avgCoords ? avgCoords : dartPosition;
+    
+    if (!coordsToUse || !regionToUse) {
       isOpeningDirectionsRef.current = false;
       return;
     }
 
     // 카카오맵 공식 길찾기 URL: /link/by/car/출발지이름,위도,경도/도착지이름,위도,경도
     // 이름에 쉼표가 있으면 경로 파싱이 깨지므로 제거
+    // 읍/면/동까지만 추출: "경기도 남양주시 호평동 산123-45" -> "경기도 남양주시 호평동"
+    let endName = regionToUse.replace(/,/g, ' ');
+    // 공백으로 분리
+    const parts = endName.split(' ').filter(p => p.length > 0);
+    if (parts.length > 0) {
+      // 시/도, 시/군/구, 읍/면/동까지만 유지 (최대 3개 부분)
+      // 리(region_4depth_name)는 "리"로 끝나므로 제거
+      // 지번 주소 번호(숫자)도 제거
+      const filteredParts = [];
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        // 숫자로 시작하는 부분(지번 주소 번호)이면 중단
+        if (/^\d+(-\d+)?$/.test(part) || /^산\d+(-\d+)?$/.test(part)) {
+          break;
+        }
+        // "리"로 끝나는 부분이면 제거하고 중단 (읍/면/동까지만 유지)
+        if (part.endsWith('리')) {
+          break;
+        }
+        filteredParts.push(part);
+        // 시/도, 시/군/구, 읍/면/동 최대 3개까지만 유지
+        if (filteredParts.length >= 3) {
+          break;
+        }
+      }
+      endName = filteredParts.join(' ');
+    }
+    
     const startName = '용산역';
-    const endName = winnerRegion.replace(/,/g, ' ');
-    const url = `https://map.kakao.com/link/by/car/${startName},${YONGSAN_STATION.lat},${YONGSAN_STATION.lng}/${endName},${dartPosition.lat},${dartPosition.lng}`;
+    const url = `https://map.kakao.com/link/by/car/${startName},${YONGSAN_STATION.lat},${YONGSAN_STATION.lng}/${endName},${coordsToUse.lat},${coordsToUse.lng}`;
 
     const uniqueId = Date.now();
     window.open(url, `kakao-directions-${uniqueId}`, 'noopener,noreferrer');
@@ -694,7 +814,7 @@ function App() {
     setTimeout(() => {
       isOpeningDirectionsRef.current = false;
     }, 2000);
-  }, [dartPosition, winnerRegion]);
+  }, [dartPosition, winnerRegion, isUsingAvgRegion, avgRegionName, avgCoords]);
 
   return (
     <div className="app">
@@ -708,7 +828,7 @@ function App() {
             }}
             stuckDartPosition={dartPosition}
             flyingDartPosition={flyingDartPosition}
-            startPosition={showStartCar && !showPopup && (!isThrowing || flyingDartPosition === null) ? YONGSAN_STATION : null}
+            startPosition={showStartCar && !showPopup && !dartPosition && (!isThrowing || flyingDartPosition === null) ? YONGSAN_STATION : null}
             carRotation={carRotation}
           />
           
