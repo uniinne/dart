@@ -7,6 +7,7 @@ const DartLauncher = ({
   onShowFoodList,
   onShowPlaceList,
   onShowHotelList,
+  onShowDirections,
   isThrowing,
   showDart = true,
   canReset = false,
@@ -37,6 +38,15 @@ const DartLauncher = ({
     } else {
       // eslint-disable-next-line no-console
       console.log('숙소 찾기 아이콘 클릭');
+    }
+  };
+
+  const handleDirectionsClick = () => {
+    if (onShowDirections) {
+      onShowDirections();
+    } else {
+      // eslint-disable-next-line no-console
+      console.log('길찾기 아이콘 클릭');
     }
   };
 
@@ -165,6 +175,61 @@ const DartLauncher = ({
                 </svg>
               </div>
               <span className="list-button-label">관광지 리스트</span>
+            </button>
+
+            {/* 길찾기 */}
+            <button
+              type="button"
+              className="list-button"
+              onClick={handleDirectionsClick}
+              disabled={isThrowing}
+            >
+              <div className="list-button-icon">
+                <svg
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  {/* 출발지 (용산역) */}
+                  <circle
+                    cx="6"
+                    cy="18"
+                    r="3"
+                    fill="#4A90E2"
+                    stroke="#fff"
+                    strokeWidth="1.5"
+                  />
+                  {/* 도착지 (당첨 지역) */}
+                  <circle
+                    cx="18"
+                    cy="6"
+                    r="3"
+                    fill="#f5576c"
+                    stroke="#fff"
+                    strokeWidth="1.5"
+                  />
+                  {/* 경로 선 */}
+                  <path
+                    d="M6 18 Q12 12 18 6"
+                    stroke="#4A90E2"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                  {/* 화살표 */}
+                  <path
+                    d="M16 7 L18 6 L16 5"
+                    stroke="#4A90E2"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                </svg>
+              </div>
+              <span className="list-button-label">길찾기</span>
             </button>
           </div>
         )}

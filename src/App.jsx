@@ -33,6 +33,7 @@ function App() {
   const isOpeningFoodRef = useRef(false);
   const isOpeningPlaceRef = useRef(false);
   const isOpeningHotelRef = useRef(false);
+  const isOpeningDirectionsRef = useRef(false);
 
   const dartSvg = useMemo(() => {
     return (
@@ -167,13 +168,18 @@ function App() {
   const isValidRegionName = (name) => {
     if (!name || typeof name !== 'string') return false;
     const trimmed = name.trim();
-    return trimmed.length > 0 && trimmed !== '알 수 없는 지역';
+    if (trimmed.length === 0 || trimmed === '알 수 없는 지역') return false;
+    
+    // 읍/면/동이 포함되어 있는지 확인 (공백으로 분리했을 때 3개 이상의 부분이 있어야 함)
+    const parts = trimmed.split(' ').filter(p => p.length > 0);
+    // 시/도, 시/군/구, 읍/면/동 최소 3개 부분이 있어야 유효
+    return parts.length >= 3;
   };
 
   const preselectWinnerTarget = async () => {
-    const maxTries = 15;
+    const maxTries = 30; // 재시도 횟수 증가 (읍/면/동 포함 지역 찾기 위해)
 
-    // 일반 랜덤 좌표로 재시도
+    // 일반 랜덤 좌표로 재시도 (읍/면/동이 포함된 지역명만 유효)
     for (let i = 0; i < maxTries; i++) {
       const coords = pickRandomCoordsPreferVisible();
       try {
@@ -186,18 +192,21 @@ function App() {
       }
     }
 
-    // safeAreas 기반 좌표로 1회 더 시도
-    const safeCoords = generateSafeCoords();
-    try {
-      const regionName = await reverseGeocode(safeCoords.lat, safeCoords.lng);
-      if (isValidRegionName(regionName)) {
-        return { coords: safeCoords, regionName };
+    // safeAreas 기반 좌표로 여러 번 시도
+    for (let i = 0; i < 10; i++) {
+      const safeCoords = generateSafeCoords();
+      try {
+        const regionName = await reverseGeocode(safeCoords.lat, safeCoords.lng);
+        if (isValidRegionName(regionName)) {
+          return { coords: safeCoords, regionName };
+        }
+      } catch (err) {
+        // ignore and retry
       }
-    } catch (err) {
-      // ignore
     }
 
     // 최후의 fallback (좌표는 하나 주되, 배너에 표시할 지역명이 없을 수 있음)
+    const safeCoords = generateSafeCoords();
     return { coords: safeCoords, regionName: '알 수 없는 지역' };
   };
 
@@ -516,6 +525,30 @@ function App() {
     }, 2000);
   }, [winnerRegion]);
 
+  // 당첨 지역으로 길찾기 열기 (용산역 출발, 자동차)
+  const handleShowDirections = useCallback(() => {
+    if (isOpeningDirectionsRef.current) return;
+    isOpeningDirectionsRef.current = true;
+    
+    if (!dartPosition || !winnerRegion) {
+      isOpeningDirectionsRef.current = false;
+      return;
+    }
+
+    // 카카오맵 공식 길찾기 URL: /link/by/car/출발지이름,위도,경도/도착지이름,위도,경도
+    // 이름에 쉼표가 있으면 경로 파싱이 깨지므로 제거
+    const startName = '용산역';
+    const endName = winnerRegion.replace(/,/g, ' ');
+    const url = `https://map.kakao.com/link/by/car/${startName},${YONGSAN_STATION.lat},${YONGSAN_STATION.lng}/${endName},${dartPosition.lat},${dartPosition.lng}`;
+
+    const uniqueId = Date.now();
+    window.open(url, `kakao-directions-${uniqueId}`, 'noopener,noreferrer');
+    
+    setTimeout(() => {
+      isOpeningDirectionsRef.current = false;
+    }, 2000);
+  }, [dartPosition, winnerRegion]);
+
   return (
     <div className="app">
       <div className="map-container" ref={mapContainerRef}>
@@ -539,6 +572,7 @@ function App() {
             onShowFoodList={handleShowFoodList}
             onShowPlaceList={handleShowPlaceList}
             onShowHotelList={handleShowHotelList}
+            onShowDirections={handleShowDirections}
             isThrowing={isThrowing}
             showDart={!flyingDartPosition}
             canReset={!!dartPosition && !flyingDartPosition && !showPopup}
