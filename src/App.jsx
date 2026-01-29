@@ -452,11 +452,11 @@ function App() {
       };
 
       // 평균 좌표가 행정구역 경계/바다에 걸리면 "알 수 없는 지역"이 나올 수 있어,
-      // 소수점 끝자리부터 반올림(정밀도 낮추기)하며 읍/면/동(3뎁스) 특정될 때까지 재시도
-      // (너무 크게 뭉개지지 않도록 6자리 -> 2자리까지만 시도)
+      // 1단계: 소수점 끝자리부터 반올림(정밀도 낮추기)하며 재시도
       const decimalSteps = [6, 5, 4, 3, 2];
-
       let resolvedName = null;
+      let resolvedCoords = null;
+
       for (const d of decimalSteps) {
         const lat = roundTo(avgCoords.lat, d);
         const lng = roundTo(avgCoords.lng, d);
@@ -464,11 +464,57 @@ function App() {
         const name = await reverseGeocode(lat, lng);
         if (isValidRegionName(name)) {
           resolvedName = name;
-          setAvgCoords({ lat, lng }); // 성공한 좌표로 갱신(표시/재조회 일관성)
+          resolvedCoords = { lat, lng };
           break;
         }
       }
 
+      // 2단계: 반올림으로도 안 되면 주변 좌표(격자 탐색)로 재시도 (범위 확대)
+      if (!resolvedName) {
+        const offsets = [
+          // 작은 범위
+          [0, 0], [0.005, 0], [-0.005, 0], [0, 0.005], [0, -0.005],
+          [0.01, 0], [-0.01, 0], [0, 0.01], [0, -0.01],
+          [0.005, 0.005], [-0.005, -0.005], [0.005, -0.005], [-0.005, 0.005],
+          // 중간 범위
+          [0.015, 0], [-0.015, 0], [0, 0.015], [0, -0.015],
+          [0.02, 0], [-0.02, 0], [0, 0.02], [0, -0.02],
+          [0.015, 0.015], [-0.015, -0.015], [0.015, -0.015], [-0.015, 0.015],
+          // 큰 범위
+          [0.03, 0], [-0.03, 0], [0, 0.03], [0, -0.03],
+          [0.025, 0.025], [-0.025, -0.025], [0.025, -0.025], [-0.025, 0.025],
+        ];
+
+        for (const [dlat, dlng] of offsets) {
+          const lat = roundTo(avgCoords.lat + dlat, 5);
+          const lng = roundTo(avgCoords.lng + dlng, 5);
+          // eslint-disable-next-line no-await-in-loop
+          const name = await reverseGeocode(lat, lng);
+          if (isValidRegionName(name)) {
+            resolvedName = name;
+            resolvedCoords = { lat, lng };
+            break;
+          }
+        }
+      }
+
+      // 3단계: 그래도 안 되면 safeAreas(확실한 육지 좌표)를 순회하며 재시도
+      if (!resolvedName) {
+        const { safeAreas } = await import('./utils/randomCoords');
+        for (const safeCoord of safeAreas) {
+          // eslint-disable-next-line no-await-in-loop
+          const name = await reverseGeocode(safeCoord.lat, safeCoord.lng);
+          if (isValidRegionName(name)) {
+            resolvedName = name;
+            resolvedCoords = safeCoord;
+            break;
+          }
+        }
+      }
+
+      if (resolvedCoords) {
+        setAvgCoords(resolvedCoords); // 성공한 좌표로 갱신
+      }
       setAvgRegionName(resolvedName || '알 수 없는 지역');
       setShowAvgPopup(true);
     } catch (e) {
